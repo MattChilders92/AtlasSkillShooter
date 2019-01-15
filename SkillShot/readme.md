@@ -19,4 +19,4 @@ Planned structure:
         |               V                V
     Locator <--  ScreenInterface <---  GAME
   ```      
-EnjoY
+Enjoy
