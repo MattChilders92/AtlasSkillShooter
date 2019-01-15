@@ -14,6 +14,30 @@ using SkillShot.MouseManipulator;
 
 namespace SkillShot
 {
+    /*
+     * Matt Childers   1/10/19
+     * 
+     * This code is the very definition of messy purpose built spaghetti code and 
+     * should not be viewed or referenced by anyone for anything.
+     * Nothing more than proof on concept code that happens to work sometimes
+     * 
+     * Planned structure:
+     *                 Form  <--- Core  <---->  State <---> AppConfig
+     *                            ^  ^
+     *                            |  |
+     *                            |  --------------->DecisionMaker 
+     *                            |                       |
+     *                            V                       V
+     *                AtlasInterface                MouseInterface
+     *                    ^             Timer              |
+     *                    |               |                |
+     *                    |               V                V
+     *                Locator <--  ScreenInterface <---  GAME
+     *                   
+     * 
+     * Enjoy
+     * */
+
     public partial class SkillShot : Form
     {
         double widthScale = 1;
@@ -46,25 +70,17 @@ namespace SkillShot
             DESKTOPVERTRES = 117,
         }
 
-        private float getScalingFactor()
-        {
-            Graphics g = Graphics.FromHwnd(IntPtr.Zero);
-            IntPtr desktop = g.GetHdc();
-            int LogicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.VERTRES);
-            int PhysicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPVERTRES);
-
-            float ScreenScalingFactor = (float)PhysicalScreenHeight / (float)LogicalScreenHeight;
-
-            return ScreenScalingFactor; // 1.25 = 125%
-        }
-
         private Size GetDpiSafeResolution()
         {
-            using (Graphics graphics = this.CreateGraphics())
+            using (Graphics graphics = Graphics.FromHwnd(IntPtr.Zero))
             {
+                IntPtr desktop = g.GetHdc();
+                int LogicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.VERTRES);
+                int PhysicalScreenHeight = GetDeviceCaps(desktop, (int)DeviceCap.DESKTOPVERTRES);
+                float ScreenScalingFactor = (float)PhysicalScreenHeight / (float)LogicalScreenHeight;
                 var rect = getAtlasRectangle();
-                return new Size((int)(rect.Width * graphics.DpiX * getScalingFactor()) / 96, 
-                    (int)(rect.Height * graphics.DpiY * getScalingFactor()) / 96);
+                return new Size((int)(rect.Width * graphics.DpiX * ScreenScalingFactor) / 96, 
+                    (int)(rect.Height * graphics.DpiY * ScreenScalingFactor) / 96);
             }
         }
 
