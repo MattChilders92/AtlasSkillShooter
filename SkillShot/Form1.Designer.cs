@@ -40,12 +40,13 @@
             this.colors = new System.Windows.Forms.TextBox();
             this.clear = new System.Windows.Forms.Button();
             this.errorBox = new System.Windows.Forms.TextBox();
+            this.autoStart = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
             // 
             // startButton
             // 
-            this.startButton.Location = new System.Drawing.Point(3, 11);
+            this.startButton.Location = new System.Drawing.Point(3, 10);
             this.startButton.Name = "startButton";
             this.startButton.Size = new System.Drawing.Size(133, 46);
             this.startButton.TabIndex = 0;
@@ -56,7 +57,7 @@
             // pictureBox1
             // 
             this.pictureBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
-            this.pictureBox1.Location = new System.Drawing.Point(3, 65);
+            this.pictureBox1.Location = new System.Drawing.Point(3, 67);
             this.pictureBox1.Name = "pictureBox1";
             this.pictureBox1.Size = new System.Drawing.Size(1232, 128);
             this.pictureBox1.TabIndex = 3;
@@ -80,7 +81,7 @@
             // debugButton
             // 
             this.debugButton.Font = new System.Drawing.Font("Microsoft Sans Serif", 6F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.debugButton.Location = new System.Drawing.Point(142, 11);
+            this.debugButton.Location = new System.Drawing.Point(142, 10);
             this.debugButton.Name = "debugButton";
             this.debugButton.Size = new System.Drawing.Size(83, 46);
             this.debugButton.TabIndex = 1;
@@ -91,7 +92,7 @@
             // botStats
             // 
             this.botStats.AutoSize = true;
-            this.botStats.Location = new System.Drawing.Point(312, 10);
+            this.botStats.Location = new System.Drawing.Point(307, 38);
             this.botStats.Name = "botStats";
             this.botStats.Size = new System.Drawing.Size(172, 20);
             this.botStats.TabIndex = 18;
@@ -100,7 +101,7 @@
             // status
             // 
             this.status.AutoSize = true;
-            this.status.Location = new System.Drawing.Point(312, 37);
+            this.status.Location = new System.Drawing.Point(421, 12);
             this.status.Name = "status";
             this.status.Size = new System.Drawing.Size(206, 20);
             this.status.TabIndex = 14;
@@ -146,6 +147,17 @@
             this.errorBox.TabIndex = 17;
             this.errorBox.Text = "No Errors";
             // 
+            // autoStart
+            // 
+            this.autoStart.AutoSize = true;
+            this.autoStart.Location = new System.Drawing.Point(307, 11);
+            this.autoStart.Name = "autoStart";
+            this.autoStart.Size = new System.Drawing.Size(108, 24);
+            this.autoStart.TabIndex = 20;
+            this.autoStart.Text = "Auto Start";
+            this.autoStart.UseVisualStyleBackColor = true;
+            this.autoStart.CheckedChanged += new System.EventHandler(this.autoStart_CheckedChanged);
+            // 
             // SkillShot
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(9F, 20F);
@@ -161,6 +173,7 @@
             this.Controls.Add(this.resultBox);
             this.Controls.Add(this.colors);
             this.Controls.Add(this.pictureBox1);
+            this.Controls.Add(this.autoStart);
             this.MaximizeBox = false;
             this.Name = "SkillShot";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Hide;
@@ -184,6 +197,7 @@
         private System.Windows.Forms.Label status;
         private System.Windows.Forms.Label botStats;
         private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.CheckBox autoStart;
     }
 }
 

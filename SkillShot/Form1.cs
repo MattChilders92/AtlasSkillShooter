@@ -100,23 +100,24 @@ namespace SkillShot
         public SkillShot()
         {
             InitializeComponent();
+            if (Properties.Settings.Default.autoStart)
+            {
+                running = true;
+            }
             setupEnv();
-            RefreshTimer.Enabled = true;
-            updateStats();
         }
 
         private void button1_Click(object sender, EventArgs e)
         {
-            setupEnv();
-            if (offset.Width == 0 || offset.Height == 0)
+            var isSetup = offset.Width != 0 && offset.Height != 0;
+            searchMode = isSetup ? false : !searchMode;
+            if (searchMode)
             {
                 doSearch(true);
-            } else
-            {
-                running = !running;
             }
-            startButton.Text = running ? "Stop" : "Start";
-            RefreshTimer.Enabled = true;
+            running = isSetup ? !running : false;
+            resultBox.Items.Add(searchMode + ", " + running);
+            setupEnv();
         }
 
 
@@ -124,26 +125,30 @@ namespace SkillShot
         {
             Properties.Settings.Default.hitRate = new Point();
             Properties.Settings.Default.Offset = new Rectangle();
+            Properties.Settings.Default.autoStart = false;
             Properties.Settings.Default.Save();
-            doSearch(!searchMode);
-            RefreshTimer.Enabled = true;
-            running = true;
+            autoStart.Checked = false;
+            RefreshTimer.Enabled = false;
+            running = false;
             setupEnv();
         }
 
         private void setupEnv(Rectangle overrideOffect = new Rectangle())
         {
-            // setup offset from storage
+            var screenCoords = getAtlasRectangle();
+            autoStart.Checked = Properties.Settings.Default.autoStart;
             offset = overrideOffect.Width > 0 ? overrideOffect : Properties.Settings.Default.Offset;
             screenSize = GetDpiSafeResolution();
             widthScale = 1.0 * screenSize.Width / refSize.Width;
             heightScale = 1.0 * screenSize.Height / refSize.Height;
-            debugButton.Text = debugMode ? "Stop Debugging" : "Debug";
             Height = debugMode ? 503 : 170;
-            var screenCoords = getAtlasRectangle();
             scaledOffset = new Rectangle(screenCoords.X + (int)(widthScale * offset.X), screenCoords.Y + (int)(heightScale * offset.Y), (int)(widthScale * offset.Width), (int)(heightScale * offset.Height));
-        }
 
+            updateStats();
+            debugButton.Text = debugMode ? "Stop Debugging" : "Debug";
+            startButton.Text = running || searchMode ? "Stop" : (isSetup() ? "Start" : "Setup");
+            RefreshTimer.Enabled = searchMode || running;
+        }
         private void RefreshTimer_Tick(object sender, EventArgs e)
         {
             try
@@ -154,6 +159,11 @@ namespace SkillShot
                 errorBox.Text = "ERROR: " + ex.Message + "/n Trace:" + ex.StackTrace;
                 button1_Click(null, null);
             }
+        }
+
+        private bool isSetup()
+        {
+            return !(offset.Width == 0 | scaledOffset.Width == 0 | offset.Height == 0 | scaledOffset.Height == 0);
         }
 
         private void WindowScreenshot(String filepath, String filename, ImageFormat format)
@@ -177,6 +187,7 @@ namespace SkillShot
             string success = basePath + "succeed";
             string[] result = new string[50];
             var ps = Process.GetProcessesByName("AtlasGame");
+            Process p = ps[0];
             if (ps.Length == 0)
             {
                  colors.Text = "ATLAS ISNT OPEN YET";
@@ -188,13 +199,11 @@ namespace SkillShot
                 }
                 return;
             }
-            if ((!searchMode && (offset.Width == 0 | scaledOffset.Width == 0 | offset.Height == 0 | scaledOffset.Height == 0)))
+            if (!searchMode && !isSetup())
             {
-                RefreshTimer.Enabled = true;
                 doSearch(true);
                 return;
             }
-            Process p = ps[0];
             Graphics g;
             if (searchMode)
             {
@@ -281,12 +290,10 @@ namespace SkillShot
                         var current = coords[0];
                         if (coords[2].Width > 200 * heightScale && goal.X > 5 && goal.Width > 5)
                         {
-                            var pivotPoint = 150;
-                            var wiggleMag = 70;
-                            var wiggleRoom = (((pivotPoint * widthScale) - coords[1].Width) / (pivotPoint * widthScale)) * wiggleMag;
-                            //wiggleRoom = 75 * widthScale;
+                            var wiggleRoom = coords[2].Width * 0.05;
+                            var currentMid = current.Left + current.Width / 2;
 
-                            var shouldClick = current.Right > (goal.Left - wiggleRoom) && current.Left < (goal.Right + wiggleRoom);
+                            var shouldClick = currentMid > (goal.Left - wiggleRoom) && currentMid < (goal.Right + wiggleRoom);
                             var goalStart = (int)(1000.0 * (coords[1].X - coords[2].X) / coords[2].Width) / 10.0;
                             var goalEnd = (int)((1000.0 * (coords[1].X + coords[1].Width) - coords[2].X) / coords[2].Width) / 10.0;
                             var currentPrecent = (int)((1000.0 * (current.X + (current.Width / 2.0)) - coords[2].X) / coords[2].Width) / 10.0;
@@ -297,7 +304,6 @@ namespace SkillShot
                             if (shouldClick && !clicked)
                             {
                                 status.Text = "Status: At (" + currentPrecent + "%) going for (" + goalStart + "% - " + goalEnd + "%)";
-                                resultBox.Items.Add(coordsString);
                                 previousMsg = coordsString;
                                 VirtualMouse.LeftClick();
                                 clicked = true;
@@ -305,7 +311,7 @@ namespace SkillShot
                             }
                             if (clicked && previousMsg != "" && (centerColor == "RED" || centerColor == "GREEN"))
                             {
-                                if (waitCount == 10)
+                                if (waitCount == 5)
                                 {
                                     var hitRate = Properties.Settings.Default.hitRate;
                                     hitRate.X += (centerColor == "RED") ? 0 : 1;
@@ -315,7 +321,7 @@ namespace SkillShot
                                     updateStats();
                                     if (centerColor == "RED")
                                     {
-                                        var savePath = basePath + "\\miss-" + System.DateTime.Now.ToFileTimeUtc() + ".png";
+                                        var savePath = basePath + "miss-" + System.DateTime.Now.ToFileTimeUtc() + ".png";
 
                                         var rate = (int)(hitRate.X * 1000.0 / (hitRate.X + hitRate.Y)) / 10.0;
                                         resultBox.Items.Add("MISSED, Saving SS (" + savePath  + ").");
@@ -621,11 +627,17 @@ namespace SkillShot
         private void doSearch(bool mode)
         {
             searchMode = mode;
-            if (mode)
-            {
+            //if (mode)
+            //{
                 var res = GetDpiSafeResolution();
                 useOffset = new Rectangle(new Point(), res);
-            }
+            //}
+        }
+
+        private void autoStart_CheckedChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.autoStart = autoStart.Checked;
+            Properties.Settings.Default.Save();
         }
     }
 
