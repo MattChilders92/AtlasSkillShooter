@@ -29,7 +29,6 @@ namespace SkillShot
         double heightScale = 1;
         int frameCount = 0;
         int waitCount = 0;
-        int foundCount = 0;
         private Dictionary<Rectangle, int> foundLocations = new Dictionary<Rectangle, int>() {};
 
         private Bitmap bmp = null;
@@ -86,10 +85,6 @@ namespace SkillShot
             if (ps.Length == 0)
             {
                 status.Text = "ATLAS ISNT OPEN YET";
-                if (running)
-                {
-                    button1_Click(null, null);
-                }
                 return result;
             }
             Process p = ps[0];
@@ -100,23 +95,7 @@ namespace SkillShot
         public SkillShot()
         {
             InitializeComponent();
-            if (Properties.Settings.Default.autoStart)
-            {
-                running = true;
-            }
-            setupEnv();
-        }
-
-        private void button1_Click(object sender, EventArgs e)
-        {
-            var isSetup = offset.Width != 0 && offset.Height != 0;
-            searchMode = isSetup ? false : !searchMode;
-            if (searchMode)
-            {
-                doSearch(true);
-            }
-            running = isSetup ? !running : false;
-            resultBox.Items.Add(searchMode + ", " + running);
+            running = true;
             setupEnv();
         }
 
@@ -125,28 +104,31 @@ namespace SkillShot
         {
             Properties.Settings.Default.hitRate = new Point();
             Properties.Settings.Default.Offset = new Rectangle();
-            Properties.Settings.Default.autoStart = false;
             Properties.Settings.Default.Save();
-            autoStart.Checked = false;
-            RefreshTimer.Enabled = false;
-            running = false;
             setupEnv();
         }
 
-        private void setupEnv(Rectangle overrideOffect = new Rectangle())
+        private void setupEnv()
         {
             var screenCoords = getAtlasRectangle();
-            autoStart.Checked = Properties.Settings.Default.autoStart;
-            offset = overrideOffect.Width > 0 ? overrideOffect : Properties.Settings.Default.Offset;
+            if (Properties.Settings.Default.Offset.Width > 0)
+            {
+                offset = Properties.Settings.Default.Offset;
+            } else
+            {
+                offset = screenCoords;
+                useOffset = getAtlasRectangle();
+                searchMode = true;
+            }
             screenSize = GetDpiSafeResolution();
             widthScale = 1.0 * screenSize.Width / refSize.Width;
             heightScale = 1.0 * screenSize.Height / refSize.Height;
             Height = debugMode ? 503 : 170;
             scaledOffset = new Rectangle(screenCoords.X + (int)(widthScale * offset.X), screenCoords.Y + (int)(heightScale * offset.Y), (int)(widthScale * offset.Width), (int)(heightScale * offset.Height));
+            errorBox.Text = "ScreenSize = (" + screenSize + ")    AtlasCoords = (" + screenCoords + ")  scaledOffset = (" + scaledOffset + ")  offset = (" + offset + ")";
 
             updateStats();
             debugButton.Text = debugMode ? "Stop Debugging" : "Debug";
-            startButton.Text = running || searchMode ? "Stop" : (isSetup() ? "Start" : "Setup");
             RefreshTimer.Enabled = searchMode || running;
         }
         private void RefreshTimer_Tick(object sender, EventArgs e)
@@ -157,13 +139,12 @@ namespace SkillShot
             } catch (Exception ex)
             {
                 errorBox.Text = "ERROR: " + ex.Message + "/n Trace:" + ex.StackTrace;
-                button1_Click(null, null);
             }
         }
 
         private bool isSetup()
         {
-            return !(offset.Width == 0 | scaledOffset.Width == 0 | offset.Height == 0 | scaledOffset.Height == 0);
+            return !(offset.Width <= 0 | scaledOffset.Width <= 0 | offset.Height == 0 | scaledOffset.Height == 0);
         }
 
         private void WindowScreenshot(String filepath, String filename, ImageFormat format)
@@ -187,120 +168,82 @@ namespace SkillShot
             string success = basePath + "succeed";
             string[] result = new string[50];
             var ps = Process.GetProcessesByName("AtlasGame");
-            Process p = ps[0];
             if (ps.Length == 0)
             {
                  colors.Text = "ATLAS ISNT OPEN YET";
-                if (running)
-                {
-                    RefreshTimer.Enabled = false;
-                    running = false;
-                    startButton.Text = running ? "Stop" : "Start";
-                }
                 return;
             }
-            if (!searchMode && !isSetup())
+            Process p = ps[0];
+            if (!isSetup())
             {
+                colors.Text = "Need to find the skillshot region of screen!";
+                setupEnv();
                 doSearch(true);
-                return;
             }
             Graphics g;
-            if (searchMode)
+            Rectangle screenshotBounds = searchMode ? useOffset : offset;
+            if (screenshotBounds.Width <= 0 || screenshotBounds.Height <= 0)
             {
-                if (useOffset.Width == 0 | useOffset.Height == 0)
-                {
-                    return;
-                }
-                bmp = new Bitmap(useOffset.Width, useOffset.Height);
-                g = Graphics.FromImage(bmp);
-                g.CopyFromScreen(useOffset.X, useOffset.Y, 0, 0, useOffset.Size, CopyPixelOperation.SourceCopy);
-            } else
-            {
-                bmp = new Bitmap(scaledOffset.Width, scaledOffset.Height);
-                g = Graphics.FromImage(bmp);
-                g.CopyFromScreen(scaledOffset.Left, scaledOffset.Top, 0, 0, bmp.Size, CopyPixelOperation.SourceCopy);
+                return;
             }
+            bmp = new Bitmap(screenshotBounds.Width, screenshotBounds.Height);
+            g = Graphics.FromImage(bmp);
+            g.CopyFromScreen(screenshotBounds.X, screenshotBounds.Y, 0, 0, bmp.Size, CopyPixelOperation.SourceCopy);
             pictureBox1.SizeMode = PictureBoxSizeMode.StretchImage;
             g.Dispose();
 
             if (bmp != null)
             {
-                if (searchMode)
+                var doingSkillShot = IsProgressPresent(bmp);
+                Rectangle[] coords = new Rectangle[] { };
+                if (doingSkillShot.Height != 0 && doingSkillShot.X >= 0)
                 {
-                    var doingSkillShot = isProgressPresent(bmp);
-                    doingSkillShot.X += useOffset.X;
-                    doingSkillShot.Y += useOffset.Y;
-                    if (doingSkillShot.Height != 0 && doingSkillShot.Width != 0)
+                    Rectangle rounded = new Rectangle(RoundOff(doingSkillShot.X), RoundOff(doingSkillShot.Y), RoundOff(doingSkillShot.Width), RoundOff(doingSkillShot.Height));
+                    var ratio = RoundOff(doingSkillShot.Width / doingSkillShot.Height, 1);
+                    var screenRatio = RoundOff(screenshotBounds.Height / doingSkillShot.Height, 1);
+                    Point skillPos = new Point((int)(100.0 * doingSkillShot.X / screenshotBounds.Width), (int)(100.0 * doingSkillShot.Y / screenshotBounds.Height));
+                    var seemsRight = rounded.Height != 0 && rounded.Width != 0 && ratio >= 10 && ratio <= 14 && (!searchMode || (searchMode && skillPos.X > 25 && skillPos.X < 40 && skillPos.Y > 70 && skillPos.Y < 85));
+                    doingSkillshotCheck.Checked = seemsRight;
+                    if (seemsRight)
                     {
-                        foundCount++;
-                        if (foundLocations.ContainsKey(doingSkillShot))
+                        coords = getGoal(bmp, doingSkillShot);
+                        if (searchMode && coords.Length == 3 && coords[1].Width > 0)
                         {
-                            foundLocations[doingSkillShot]++;
-                        }
-                        else
-                        {
-                            foundLocations[doingSkillShot] = 1;
-                        }
-                    }
-                    else
-                    {
-                        foundCount++;
-                    }
-                    if (foundCount > 10 && foundLocations.Keys.Count > 0)
-                    {
-                        var topRect = new Rectangle();
-                        var topCount = 0;
-                        for (var i = 0; i < foundLocations.Keys.Count; i++)
-                        {
-                            var key = foundLocations.Keys.ToArray()[i];
-                            var val = foundLocations[key];
-                            if (val > topCount)
-                            {
-                                topCount = val;
-                                topRect = key;
-                            }
-                        }
-                        resultBox.Items.Add(topRect);
+                            seeGoalCheck.Checked = true;
+                            resultBox.Items.Insert(0, "MaybeOffset (" + rounded + ") ratio = " + ratio + ", positioning = " + (skillPos) + "%");
+                            resultBox.Items.Insert(0, "Seems right, lets go with it.");
+                            var unscaledOffset = new Rectangle(
+                                (int)(doingSkillShot.X / widthScale),
+                                (int)(doingSkillShot.Y / heightScale),
+                                (int)(doingSkillShot.Width / widthScale),
+                                (int)(doingSkillShot.Height / heightScale)
+                            );
+                            offset = doingSkillShot;
 
-                        offset = topRect;
-                        var unscaledOffset = new Rectangle(
-                            (int)(topRect.X / widthScale),
-                            (int)(topRect.Y / heightScale),
-                            (int)(topRect.Width / widthScale),
-                            (int)(topRect.Height / heightScale)
-                        );
-
-                        Properties.Settings.Default.Offset = unscaledOffset;
-                        Properties.Settings.Default.Save();
-                        doSearch(false);
-                        running = true;
-                        startButton.Text = running ? "Stop" : "Start";
-                        RefreshTimer.Enabled = true;
-                        foundCount = 0;
-                        foundLocations = new Dictionary<Rectangle, int>() { };
-                        setupEnv();
-                        resultBox.Items.Add("Offset set to " + offset + ", (scaled: " + scaledOffset + ")");
-                    }
-                } else if (running) {
-                    var doingSkillShot = isProgressPresent(bmp);
-                    if (doingSkillShot.Height != 0)
-                    {
-                        var coords = getGoal(bmp, doingSkillShot);
-                        var goal = coords[1];
-                        var current = coords[0];
-                        if (coords[2].Width > 200 * heightScale && goal.X > 5 && goal.Width > 5)
+                            Properties.Settings.Default.Offset = offset;
+                            Properties.Settings.Default.Save();
+                            doSearch(false);
+                            running = true;
+                            RefreshTimer.Enabled = true;
+                            setupEnv();
+                            resultBox.Items.Insert(0, "Offset set to " + offset + ", (scaled: " + scaledOffset + ")");
+                        }
+                        if (coords.Length == 3 && coords[2].Width > 200 * heightScale && coords[1].X > 5 && coords[1].Width > 5)
                         {
-                            var wiggleRoom = coords[2].Width * 0.05;
+                            seeGoalCheck.Checked = true;
+                            var goal = coords[1];
+                            var current = coords[0];
+                            var wiggleRoom = (coords[2].Width / goal.Width - 5) * 3;
                             var currentMid = current.Left + current.Width / 2;
 
                             var shouldClick = currentMid > (goal.Left - wiggleRoom) && currentMid < (goal.Right + wiggleRoom);
                             var goalStart = (int)(1000.0 * (coords[1].X - coords[2].X) / coords[2].Width) / 10.0;
                             var goalEnd = (int)((1000.0 * (coords[1].X + coords[1].Width) - coords[2].X) / coords[2].Width) / 10.0;
                             var currentPrecent = (int)((1000.0 * (current.X + (current.Width / 2.0)) - coords[2].X) / coords[2].Width) / 10.0;
-                            var coordsString = 
+                            var coordsString =
                                 System.DateTime.Now.ToLongTimeString() + ", " + widthScale + ": Current: " + current.Left + ", " +
                                 "Goal: [" + coords[1].X + " - " + (coords[1].X + coords[1].Width) + "] +/- " + (int)(wiggleRoom) + " " +
-                                "Total: [" + coords[2].X + " - " + (coords[2].X + coords[2].Width) + "]    Shot at (" + currentPrecent  + "%) going for (" + goalStart + "% - " + goalEnd + "%)";
+                                "Total: [" + coords[2].X + " - " + (coords[2].X + coords[2].Width) + "]    Shot at (" + currentPrecent + "%) going for (" + goalStart + "% - " + goalEnd + "%)";
                             if (shouldClick && !clicked)
                             {
                                 status.Text = "Status: At (" + currentPrecent + "%) going for (" + goalStart + "% - " + goalEnd + "%)";
@@ -324,28 +267,36 @@ namespace SkillShot
                                         var savePath = basePath + "miss-" + System.DateTime.Now.ToFileTimeUtc() + ".png";
 
                                         var rate = (int)(hitRate.X * 1000.0 / (hitRate.X + hitRate.Y)) / 10.0;
-                                        resultBox.Items.Add("MISSED, Saving SS (" + savePath  + ").");
-                                        resultBox.Items.Add("Bot Status: Hits " + hitRate.X + "; Misses " + hitRate.Y + "; SuccessRate: (" + rate + "%)");
+                                        resultBox.Items.Insert(0, "MISSED, Saving SS (" + savePath + ").");
+                                        resultBox.Items.Insert(0, "Bot Status: Hits " + hitRate.X + "; Misses " + hitRate.Y + "; SuccessRate: (" + rate + "%)");
                                         bmp.Save(savePath, format);
                                         pictureBox1.ImageLocation = savePath;
                                     }
-                                    frameCount = -100;
+                                    frameCount = -50;
                                     resultBox.Items.Remove(previousMsg);
-                                    resultBox.Items.Add(previousMsg + " Result: " + (centerColor == "RED" ? "Missed!" : "Nailed It!"));
+                                    resultBox.Items.Insert(0, previousMsg + " Result: " + (centerColor == "RED" ? "Missed!" : "Nailed It!"));
                                     previousMsg = "";
                                     status.Text = "Status: See a SkillShot, Already Clicked (" + (centerColor == "RED" ? "Miss" : "Hit") + ")";
-                                } else
+                                    doSearch(false);
+                                }
+                                else
                                 {
                                     waitCount++;
                                 }
                             }
+                        } else
+                        {
+                            seeGoalCheck.Checked = false;
+                            resultBox.Items.Insert(0, "Bad Goal Current=" + coords[0] + ", Goal = " + coords[1] + ", Box = " + coords[2]);
                         }
-                    } else
-                    {
-                        status.Text = "Status: Waiting for SkillShot";
-                        clicked = false;
-                        waitCount = 0;
                     }
+                } else
+                {
+                    status.Text = "Status: Waiting for SkillShot";
+                    clicked = false;
+                    seeGoalCheck.Checked = false;
+                    doingSkillshotCheck.Checked = false;
+                    waitCount = 0;
                 }
 
                 frameCount++;
@@ -371,18 +322,23 @@ namespace SkillShot
                 botStats.Text = "Bot Status: Hits " + hits.X + "; Misses " + hits.Y + "; SuccessRate: (" + rate  + "%)";
             }
         }
-
+        public int RoundOff(int number, int interval = 10)
+        {
+            int remainder = number % interval;
+            number += (remainder < interval / 2) ? -remainder : (interval - remainder);
+            return number;
+        }
         public Rectangle[] getGoal(Bitmap bmp, Rectangle coords) // [A....C....X..Y......Z]  returns [[Current], [X,Y], [A,Z]]
         {
-            int searchY = 1;
+            int searchY = 0;
             int greys = 0;
-            int searchX = coords.Width / 2;
+            int searchX = coords.X + coords.Width / 2;
             Rectangle boxCoords = new Rectangle(0, 0, 0, 0);
             Rectangle goalCoords = new Rectangle(0, 0, 0, 0);
             Rectangle current = new Rectangle(0, 0, 0, 0);
-            while (true && coords.Width > 0 && coords.Height > 0 && searchX < coords.Width && searchY < coords.Height)
+            while (coords.Width > 0 && coords.Height > 0 && searchY < coords.Height)
             {
-                Color searchClr = bmp.GetPixel(coords.X + searchX, coords.Y + searchY);
+                Color searchClr = bmp.GetPixel(searchX, coords.Y + searchY);
                 string colorName = categorizeColor(searchClr);
                 if (colorName == "GREY" || colorName == "WHITE")
                 {
@@ -412,9 +368,14 @@ namespace SkillShot
             var foundStart = false;
             var end = 0;
 
-            for (searchX = 1; searchY > 0 && bmp.Width > 0 && searchX < bmp.Width && searchY > 0 && searchY < bmp.Height; searchX++)
+            for (searchX = 1; searchY > 0 && coords.X + searchX < bmp.Width && searchX < coords.Width && searchY > 0 && coords.Y + searchY < bmp.Height; searchX++)
             {
-                Color searchClr = bmp.GetPixel(searchX, searchY);
+                if (searchX < 0 || searchY < 0 || coords.X + searchX >= bmp.Width || coords.Y + searchY >= bmp.Height)
+                {
+                    continue;
+                }
+
+                Color searchClr = bmp.GetPixel(coords.X + searchX, coords.Y + searchY);
                 string colorName = categorizeColor(searchClr);
 
                 if (colorName == "BLACK" && greys < 5 * heightScale)
@@ -468,11 +429,10 @@ namespace SkillShot
                     }
                 }
             }
-
-            return new Rectangle[] { current, goalCoords, boxCoords };
+            return new Rectangle[] { current, goalCoords, coords };
         }
 
-        private Rectangle isProgressPresent(Bitmap bmp)
+        private Rectangle IsProgressPresent(Bitmap bmp)
         {
             int searchX = bmp.Width / 2;
             int blackInRow = 0;
@@ -485,6 +445,7 @@ namespace SkillShot
             var whiteSize = 0;
             int searchY = 1;
             var other = 0;
+            var hasGoal = false;
             for (searchY = 1; bmp.Width > 0 && searchY < bmp.Height && !found; searchY++)
             {
                 found = greyWhite > 11 * heightScale && blackSection == 2;
@@ -517,6 +478,10 @@ namespace SkillShot
                     {
                         greyWhite++;
                         other = 0;
+                        if (greyWhite > 9 * heightScale)
+                        {
+                            hasGoal = true;
+                        }
                     } else if (blackSection >= 1)
                     {
                         greyWhite--;
@@ -536,62 +501,27 @@ namespace SkillShot
                 blackSection++;
                 if (blackSection == 2)
                 {
-                    result.Height = Math.Min(searchY - result.Y, result.Y + blackSize * 2 + whiteSize + 5);
-                    // result.Height = Math.Min(searchY - result.Y, result.Y + blackSize * 2 + whiteSize + 5); // works at 3540
+                    result.Height = Math.Min(searchY - result.Y, result.Y + blackSize * 2 + whiteSize + 4);
                 }
             }
-            found = greyWhite > 9 * heightScale && blackSection == 2;
-            colors.Text = "Black Sections: " + blackSection + ", MidSection: " + greyWhite + " = " + found;
-            if (found)
+            found = hasGoal && blackSection == 2;
+            colors.Text = "Black Sections: " + blackSection + ", MidSection: " + greyWhite + " = " + found + ", SearchMode = " + searchMode;
+            result.Width = (int)(result.Height * 11.5);
+            result.X = (bmp.Width - result.Width) / 2;
+            if (searchMode)
             {
-                searchY = result.Y + result.Height / 2;
-                var mid = 0;
-                var black = 0;
-                other = 0;
-                var center = bmp.Width / 2;
-                for (searchX = center; searchX > 0 && result.Width == 0; searchX--)
-                {
-                    Color searchClr = bmp.GetPixel(searchX, searchY);
-                    string colorName = categorizeColor(searchClr);
-                    if (colorName == "GREY" | colorName == "WHITE" | colorName == "GREEN" | colorName == "RED")
-                    {
-                        mid++;
-                        black = (black <= 0 ? 0 : black - 1);
-                    } else if (colorName == "BLACK")
-                    {
-                        black++;
-                    }
-                    if (mid > 15 * widthScale && black > 7 * heightScale)
-                    {
-                        other++;
-                        if (other == 5)
-                        {
-                            // scale 1.5     + 12
-                            // scale 4       + 4
-                            // var diff = center - (searchX - 8 * widthScale); // works at 3540
-                            // var normalizedDiff = (int)Math.Min(diff, result.Height * 7.5); // works at 3540
-                            var diff = center - searchX + 4;
-                            var normalizedDiff = (int)Math.Min(diff, result.Height * 7.5) + 3;
-                            result.X = center - normalizedDiff;
-                            result.Width = normalizedDiff * 2 + 5;
-                        }
-                    }
-                }
-                var ratio = result.Height * 1.0 / result.Width;
-                if (ratio < 0.05 | ratio > 0.15)
-                {
-                    found = false;
-                }
+                result.X += useOffset.X;
+                result.Y += useOffset.Y;
             }
             return found ? result : new Rectangle(0, 0, 0, 0);
         }
 
         private string categorizeColor(Color color)
         {
-            if(color.R < 85 && color.G < 85 && color.B < 85)
+            if(color.R < 45 && color.G < 45 && color.B < 45 && (Math.Abs(color.R - color.G) <= 15 && Math.Abs(color.R - color.B) <= 15 && Math.Abs(color.B - color.G) <= 2015))
             {
                 return "BLACK";
-            } else if (color.R > 215 && color.G > 215 && color.B > 215)
+            } else if (color.R > 230 && color.G > 230 && color.B > 230)
             {
                 return "WHITE";
             }
@@ -603,7 +533,8 @@ namespace SkillShot
             {
                 return "RED";
             }
-            else if (color.R < 185 && color.G < 185 && color.B < 185 && color.R > 115 && color.G > 115 && color.B > 115)
+            else if ((color.R < 185 && color.G < 185 && color.B < 185 && color.R > 115 && color.G > 115 && color.B > 115) ||
+                (Math.Abs(color.R - color.G) <= 20 && Math.Abs(color.R - color.B) <= 20 && Math.Abs(color.B - color.G) <= 20))
             {
                 return "GREY";
             }
@@ -627,17 +558,7 @@ namespace SkillShot
         private void doSearch(bool mode)
         {
             searchMode = mode;
-            //if (mode)
-            //{
-                var res = GetDpiSafeResolution();
-                useOffset = new Rectangle(new Point(), res);
-            //}
-        }
-
-        private void autoStart_CheckedChanged(object sender, EventArgs e)
-        {
-            Properties.Settings.Default.autoStart = autoStart.Checked;
-            Properties.Settings.Default.Save();
+            useOffset = getAtlasRectangle();
         }
     }
 
