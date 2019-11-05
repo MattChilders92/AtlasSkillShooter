@@ -287,7 +287,6 @@ namespace SkillShot
                         } else
                         {
                             seeGoalCheck.Checked = false;
-                            resultBox.Items.Insert(0, "Bad Goal Current=" + coords[0] + ", Goal = " + coords[1] + ", Box = " + coords[2]);
                         }
                     }
                 } else
